@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Memory Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fafafa;
+        }
+        .calendar-day {
+            transition: all 0.3s ease;
+        }
+        .calendar-day:hover {
+            transform: scale(1.05);
+        }
+        .memory-preview {
+            transition: all 0.3s ease;
+        }
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen p-4 md:p-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-semibold text-gray-800">Daily Memory Journal</h1>
+            <p class="text-gray-600">Capture one moment each day</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="mb-4">
+                <h2 class="text-xl font-medium text-gray-800 mb-2">Today's Memory</h2>
+                <p class="text-sm text-gray-600">Upload a photo to capture today's moment</p>
+            </div>
+            <div class="flex items-center justify-center w-full">
+                <label class="flex flex-col w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6" id="upload-area">
+                        <i class="bi bi-cloud-upload text-3xl text-gray-400"></i>
+                        <p class="mb-2 text-sm text-gray-500">Click or drag to upload</p>
+                        <p class="text-xs text-gray-500">JPG, PNG (max. 10MB)</p>
+                    </div>
+                    <input type="file" class="hidden" id="file-upload" accept="image/*">
+                </label>
+            </div>
+        </div>
+
+        <!-- Calendar View -->
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-sm p-6">
+            <div class="mb-4 flex justify-between items-center">
+                <h2 class="text-xl font-medium text-gray-800">Memory Calendar</h2>
+                <div class="flex gap-2">
+                    <button id="prev-month" class="p-2 rounded-full hover:bg-gray-100">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span id="current-month" class="text-lg font-medium"></span>
+                    <button id="next-month" class="p-2 rounded-full hover:bg-gray-100">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-7 gap-2 mb-2">
+                <div class="text-center text-sm font-medium text-gray-600">Sun</div>
+                <div class="text-center text-sm font-medium text-gray-600">Mon</div>
+                <div class="text-center text-sm font-medium text-gray-600">Tue</div>
+                <div class="text-center text-sm font-medium text-gray-600">Wed</div>
+                <div class="text-center text-sm font-medium text-gray-600">Thu</div>
+                <div class="text-center text-sm font-medium text-gray-600">Fri</div>
+                <div class="text-center text-sm font-medium text-gray-600">Sat</div>
+            </div>
+            <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
+        </div>
+
+        <!-- Memory Preview Modal -->
+        <div id="memory-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+            <div class="bg-white rounded-lg p-4 max-w-lg w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-medium" id="modal-date"></h3>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <img id="modal-image" class="w-full h-auto rounded-lg" src="" alt="Memory">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDate = new Date();
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        let memories = {};
+
+        // Initialize calendar
+        function updateCalendar() {
+            const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            const startingDay = firstDay.getDay();
+            
+            document.getElementById('current-month').textContent = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+            
+            const calendarGrid = document.getElementById('calendar-grid');
+            calendarGrid.innerHTML = '';
+
+            // Add empty cells for days before the first day of the month
+            for (let i = 0; i < startingDay; i++) {
+                calendarGrid.appendChild(createCalendarDay(''));
+            }
+
+            // Add cells for each day of the month
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                const dateStr = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                const hasMemory = memories[dateStr] !== undefined;
+                calendarGrid.appendChild(createCalendarDay(day, hasMemory, dateStr));
+            }
+        }
+
+        function createCalendarDay(day, hasMemory = false, dateStr = '') {
+            const div = document.createElement('div');
+            div.className = `calendar-day h-24 border rounded-lg flex flex-col items-center justify-center ${hasMemory ? 'cursor-pointer hover:shadow-md' : ''}`;
+            
+            if (day) {
+                div.innerHTML = `
+                    <span class="text-sm font-medium ${hasMemory ? 'text-gray-800' : 'text-gray-400'}">${day}</span>
+                    ${hasMemory ? '<div class="w-2 h-2 bg-pink-500 rounded-full mt-1"></div>' : ''}
+                `;
+                if (hasMemory) {
+                    div.onclick = () => showMemory(dateStr);
+                }
+            }
+            
+            return div;
+        }
+
+        // File upload handling
+        document.getElementById('file-upload').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const uploadArea = document.getElementById('upload-area');
+            uploadArea.innerHTML = '<i class="bi bi-arrow-repeat loading text-3xl text-gray-400"></i><p class="text-sm text-gray-500 mt-2">Uploading...</p>';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('userId', 'user123');
+                formData.append('appSlug', 'bright-bright-fresh-4041');
+
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/storage/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ax27pfuhCtdIvIaGGP581j1DuAm2'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const today = new Date().toISOString().split('T')[0];
+                    memories[today] = data.url;
+                    
+                    // Save to MongoDB
+                    await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ax27pfuhCtdIvIaGGP581j1DuAm2',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            appSlug: 'bright-bright-fresh-4041',
+                            action: 'create',
+                            collection: 'memories',
+                            data: {
+                                date: today,
+                                imageUrl: data.url
+                            }
+                        })
+                    });
+
+                    updateCalendar();
+                    uploadArea.innerHTML = '<i class="bi bi-check-circle text-3xl text-green-500"></i><p class="text-sm text-gray-500 mt-2">Upload complete!</p>';
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                uploadArea.innerHTML = '<i class="bi bi-exclamation-circle text-3xl text-red-500"></i><p class="text-sm text-gray-500 mt-2">Upload failed</p>';
+            }
+
+            setTimeout(() => {
+                uploadArea.innerHTML = `
+                    <i class="bi bi-cloud-upload text-3xl text-gray-400"></i>
+                    <p class="mb-2 text-sm text-gray-500">Click or drag to upload</p>
+                    <p class="text-xs text-gray-500">JPG, PNG (max. 10MB)</p>
+                `;
+            }, 3000);
+        });
+
+        // Modal functions
+        function showMemory(dateStr) {
+            const modal = document.getElementById('memory-modal');
+            const modalImage = document.getElementById('modal-image');
+            const modalDate = document.getElementById('modal-date');
+            
+            modalImage.src = memories[dateStr];
+            modalDate.textContent = new Date(dateStr).toLocaleDateString();
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('memory-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Navigation
+        document.getElementById('prev-month').onclick = () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            updateCalendar();
+        };
+
+        document.getElementById('next-month').onclick = () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            updateCalendar();
+        };
+
+        // Initial load
+        async function loadMemories() {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ax27pfuhCtdIvIaGGP581j1DuAm2',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug: 'bright-bright-fresh-4041',
+                        action: 'read',
+                        collection: 'memories'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success && data.result) {
+                    data.result.forEach(memory => {
+                        memories[memory.date] = memory.imageUrl;
+                    });
+                    updateCalendar();
+                }
+            } catch (error) {
+                console.error('Error loading memories:', error);
+            }
+        }
+
+        loadMemories();
+        updateCalendar();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
